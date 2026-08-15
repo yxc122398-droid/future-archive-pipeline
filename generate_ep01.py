@@ -1,5 +1,4 @@
 import asyncio
-import os
 import tempfile
 from pathlib import Path
 
@@ -9,21 +8,21 @@ from pydub.effects import normalize, compress_dynamic_range
 
 OUT = Path('output')
 OUT.mkdir(exist_ok=True)
+VIDEO_MS = 74750
 
-# Shorter, faster narration designed to fit a ~75 s Bilibili episode.
-SEGMENTS = [
-    ('凌晨十一点四十七分。雨还在下。整栋实验楼，只剩林彻一个人。', '-4%', '-2Hz', 650),
-    ('又一次仿真失败后，他正准备关掉电脑，文件管理器却突然闪了一下。', '-2%', '-2Hz', 450),
-    ('屏幕上，多出了一个从没见过的磁盘。名字只有四个字——未来档案。', '-5%', '-3Hz', 650),
-    ('林彻拔掉所有外接设备。可它没有消失。设备管理器里，也没有任何记录。', '-2%', '-2Hz', 520),
-    ('磁盘中只有七个文件夹。从二零二六，一直到二零七六。', '-3%', '-2Hz', 500),
-    ('他试着打开最后一个。屏幕只留下冰冷的提示：当前时间节点，无权访问。', '-6%', '-3Hz', 700),
-    ('紧接着，二零二六年的文件夹，自行亮了起来。', '-4%', '-2Hz', 500),
-    ('里面只有一份档案。日期，是两天后的八月十七日。事件等级：一级。', '-6%', '-3Hz', 650),
-    ('预计死亡人数，一百三十七。', '-8%', '-4Hz', 750),
-    ('林彻继续往下看。下一行，写着第一名确认死亡者——林彻。', '-7%', '-4Hz', 950),
-    ('下一秒，屏幕右下角浮出红色倒计时：四十七小时，五十九分，四十一秒。', '-6%', '-3Hz', 600),
-    ('从这一刻起，他只剩不到四十八小时，去证明这份来自未来的档案，到底是真是假。', '-3%', '-2Hz', 650),
+# Each line is anchored to the exact visual beat in the 74.75 s edit.
+# (start_ms, text, rate, pitch, maximum speech window in ms)
+CUES = [
+    (500,  '凌晨十一点四十七分。雨还在下。整栋实验楼，只剩林彻一个人。', '-1%', '-2Hz', 5600),
+    (6500, '又一次仿真失败。他正准备关机，屏幕忽然闪了一下。', '+2%', '-2Hz', 6500),
+    (13750,'一个从未见过的磁盘，凭空出现。名字只有四个字——未来档案。', '+2%', '-3Hz', 5900),
+    (20000,'里面只有七个文件夹。从二零二六，一直到二零七六。', '+3%', '-2Hz', 6200),
+    (26600,'他试着打开最后一个。系统提示：当前时间节点，无权访问。只有二零二六仍能打开。', '+7%', '-3Hz', 7000),
+    (34100,'两天后的八月十七日。一级事件。预计死亡，一百三十七人。', '+3%', '-3Hz', 7200),
+    (41800,'林彻继续往下看。首名确认死亡人员——林彻。', '-1%', '-4Hz', 7600),
+    (50000,'他关掉窗口，又重新打开。名字没有变化。倒计时已经开始：四十七小时，五十九分，四十一秒。', '+8%', '-3Hz', 9300),
+    (59800,'天气正常，没有灾害预警。可档案中的事件原因，仍然被锁定。', '+4%', '-2Hz', 6200),
+    (66300,'距离林彻死亡——还有四十八小时。', '-5%', '-4Hz', 5600),
 ]
 
 PREFERRED = ['zh-CN-YunxiNeural', 'zh-CN-YunyangNeural', 'zh-CN-YunjianNeural']
@@ -39,30 +38,39 @@ async def pick_voice():
         raise RuntimeError('No zh-CN male voice available')
     return zh_male[0]
 
+
+def fit_to_window(seg: AudioSegment, max_ms: int) -> AudioSegment:
+    # Never let one sentence drift into the next visual event. Edge-TTS rates above
+    # are selected to fit naturally; this is only a final safety trim at a quiet tail.
+    if len(seg) <= max_ms:
+        return seg
+    return seg[:max_ms].fade_out(120)
+
 async def main():
     voice = await pick_voice()
     print('Using voice:', voice)
-    combined = AudioSegment.silent(duration=450)
+    timeline = AudioSegment.silent(duration=VIDEO_MS, frame_rate=48000).set_channels(2)
+
     with tempfile.TemporaryDirectory() as td:
-        for i, (text, rate, pitch, pause_ms) in enumerate(SEGMENTS, 1):
+        for i, (start_ms, text, rate, pitch, max_ms) in enumerate(CUES, 1):
             p = Path(td) / f'{i:02d}.mp3'
-            communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate, volume='+0%', pitch=pitch)
+            communicate = edge_tts.Communicate(
+                text=text, voice=voice, rate=rate, volume='+0%', pitch=pitch
+            )
             await communicate.save(str(p))
             seg = AudioSegment.from_file(p)
-            # Gentle processing only; preserve natural articulation.
             seg = compress_dynamic_range(seg, threshold=-19.0, ratio=2.0, attack=8.0, release=90.0)
-            combined += seg + AudioSegment.silent(duration=pause_ms)
+            seg = normalize(seg, headroom=2.0)
+            seg = fit_to_window(seg, max_ms)
+            seg = seg.set_frame_rate(48000).set_channels(2)
+            timeline = timeline.overlay(seg, position=start_ms)
+            print(f'cue {i:02d}: start={start_ms/1000:.2f}s len={len(seg)/1000:.2f}s')
 
-    combined = normalize(combined, headroom=1.5)
-    # Do not exceed the video duration. Leave room for final title card.
-    max_ms = 71500
-    if len(combined) > max_ms:
-        combined = combined[:max_ms].fade_out(300)
-    combined = combined.set_frame_rate(48000).set_channels(2)
-    combined.export(OUT / '未来档案_EP01_自然旁白.wav', format='wav')
-    combined.export(OUT / '未来档案_EP01_自然旁白.mp3', format='mp3', bitrate='192k')
+    timeline = normalize(timeline, headroom=1.7)
+    timeline.export(OUT / '未来档案_EP01_同步旁白.wav', format='wav')
+    timeline.export(OUT / '未来档案_EP01_同步旁白.mp3', format='mp3', bitrate='192k')
     (OUT / 'voice.txt').write_text(voice + '\n', encoding='utf-8')
-    print('Duration ms:', len(combined))
+    print('Timeline duration ms:', len(timeline))
 
 if __name__ == '__main__':
     asyncio.run(main())
