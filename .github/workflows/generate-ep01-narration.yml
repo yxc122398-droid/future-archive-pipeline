@@ -1,0 +1,45 @@
+name: Generate EP01 Narration
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'generate_ep01.py'
+      - '.github/workflows/generate-ep01-narration.yml'
+  workflow_dispatch:
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ffmpeg and Python packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install edge-tts pydub
+
+      - name: Generate narration
+        run: python generate_ep01.py
+
+      - name: Inspect output
+        run: |
+          ls -lh output
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 output/*.mp3
+
+      - name: Upload narration artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-archive-ep01-narration
+          path: output/
+          if-no-files-found: error
+          retention-days: 30
