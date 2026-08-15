@@ -1,0 +1,39 @@
+name: Generate EP02-EP10 Narration
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'generate_ep02_10.py'
+      - '.github/workflows/generate-ep02-10.yml'
+  workflow_dispatch:
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install ffmpeg and Python packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install edge-tts pydub
+      - name: Generate narration batch
+        run: python generate_ep02_10.py
+      - name: Inspect output
+        run: |
+          find output_ep02_10 -maxdepth 2 -type f -printf '%p\n' | sort
+      - name: Upload narration batch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-archive-ep02-10-narration
+          path: output_ep02_10/
+          if-no-files-found: error
+          retention-days: 30
