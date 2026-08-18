@@ -38,7 +38,10 @@ jobs:
       - name: Inspect output
         run: |
           ls -lh output_engine_pilot
-          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 output_engine_pilot/*.mp3
+          for f in output_engine_pilot/*.mp3; do
+            echo "$f"
+            ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 "$f"
+          done
       - name: Publish compact base64 segments to repository
         if: github.event_name == 'push'
         run: |
