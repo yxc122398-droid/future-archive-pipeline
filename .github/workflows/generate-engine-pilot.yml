@@ -8,6 +8,9 @@ on:
       - '.github/workflows/generate-engine-pilot.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   narrate:
     runs-on: ubuntu-latest
@@ -31,6 +34,21 @@ jobs:
         run: |
           ls -lh output_engine_pilot
           ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 output_engine_pilot/*.mp3
+      - name: Publish compact base64 segments to repository
+        run: |
+          rm -rf published_engine_pilot
+          mkdir -p published_engine_pilot
+          cp output_engine_pilot/timings.json published_engine_pilot/
+          cp output_engine_pilot/voice.txt published_engine_pilot/
+          for f in output_engine_pilot/seg_*.mp3; do
+            n=$(basename "$f")
+            base64 -w 0 "$f" > "published_engine_pilot/${n}.b64"
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add published_engine_pilot
+          git commit -m "Publish engine pilot narration segments" || true
+          git push
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
