@@ -1,0 +1,3 @@
+zh-CN-YunxiNeural
+rate=+2%
+pitch=-6Hz
