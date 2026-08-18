@@ -1,0 +1,40 @@
+name: Generate Battery80 Narration
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'generate_battery80.py'
+      - '.github/workflows/generate-battery80.yml'
+  workflow_dispatch:
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install ffmpeg and packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install edge-tts pydub
+      - name: Generate narration
+        run: python generate_battery80.py
+      - name: Inspect output
+        run: |
+          ls -lh output_battery80
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 output_battery80/手机充到80以后为什么变慢_旁白.mp3
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: battery80-narration
+          path: output_battery80/
+          if-no-files-found: error
+          retention-days: 30
