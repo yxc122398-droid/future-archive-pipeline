@@ -1,0 +1,37 @@
+name: Generate Router Restart Narration
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'generate_router_restart.py'
+      - '.github/workflows/generate-router-restart.yml'
+  workflow_dispatch:
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install edge-tts pydub
+      - name: Generate narration
+        run: python generate_router_restart.py
+      - name: Inspect output
+        run: |
+          ls -lh output_router_restart
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 output_router_restart/路由器要不要每天重启_旁白.mp3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: router-restart-narration
+          path: output_router_restart/
+          if-no-files-found: error
+          retention-days: 30
