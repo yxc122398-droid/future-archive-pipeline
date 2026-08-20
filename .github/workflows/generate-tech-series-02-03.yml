@@ -1,0 +1,41 @@
+name: Generate Tech Series 02 03 Narration
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'generate_tech_series_02_03.py'
+      - '.github/workflows/generate-tech-series-02-03.yml'
+  workflow_dispatch:
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install edge-tts pydub
+      - name: Generate narration
+        run: python generate_tech_series_02_03.py
+      - name: Inspect output
+        run: |
+          find output_tech_series -maxdepth 2 -type f -print
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 output_tech_series/ep02_120w/narration.mp3
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 output_tech_series/ep03_thermal/narration.mp3
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tech-series-02-03-narration
+          path: output_tech_series/
+          if-no-files-found: error
+          retention-days: 30
