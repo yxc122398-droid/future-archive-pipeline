@@ -1,0 +1,37 @@
+name: Generate Speedtest Download Narration
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'generate_speedtest_download.py'
+      - '.github/workflows/generate-speedtest-download.yml'
+  workflow_dispatch:
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install edge-tts pydub
+      - name: Generate narration
+        run: python generate_speedtest_download.py
+      - name: Inspect output
+        run: |
+          ls -lh output_speedtest_download
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 output_speedtest_download/测速500Mbps为什么下载只有几十MB每秒_旁白.mp3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speedtest-download-narration
+          path: output_speedtest_download/
+          if-no-files-found: error
+          retention-days: 30
