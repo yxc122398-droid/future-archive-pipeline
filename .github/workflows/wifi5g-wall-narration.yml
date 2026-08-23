@@ -1,0 +1,27 @@
+name: Generate WiFi 5GHz Wall Narration
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'scripts/gen_wifi5g_wall_narration.py'
+      - '.github/workflows/wifi5g-wall-narration.yml'
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install packages
+        run: pip install edge-tts
+      - name: Generate narration
+        run: python scripts/gen_wifi5g_wall_narration.py
+      - name: Inspect output
+        run: ls -lh output && ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 output/wifi5g_wall_narration.mp3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wifi5g-wall-narration
+          path: output/
